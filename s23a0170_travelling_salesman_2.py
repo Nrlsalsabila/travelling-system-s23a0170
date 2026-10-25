@@ -21,7 +21,7 @@ st.set_page_config(
 
 st.title("🗺️ Travelling Salesman Problem using Genetic Algorithm")
 
-# 1. Define city coordinates directly
+# 1. City coordinates definition
 city_coords = {
     "Gliwice": (0, 1),
     "Cairo": (3, 2),
@@ -39,10 +39,8 @@ cities_names = list(city_coords.keys())
 x = [coords[0] for coords in city_coords.values()]
 y = [coords[1] for coords in city_coords.values()]
 
-# Pastel Palette
+# Colors & Icons
 colors = sns.color_palette("pastel", len(cities_names))
-
-# City Icons
 city_icons = {
     "Gliwice": "♕",
     "Cairo": "♖",
@@ -56,7 +54,7 @@ city_icons = {
     "Budapest": "♝",
 }
 
-# --- Section 1: Display Initial City Map ---
+# --- Section 1: Initial Map ---
 st.header("1. Initial City Map & Network")
 
 fig1, ax1 = plt.subplots(figsize=(12, 8))
@@ -79,7 +77,6 @@ for i, (city, (city_x, city_y)) in enumerate(city_coords.items()):
         textcoords="offset points",
     )
 
-    # Connect cities with opaque lines
     for j, (other_city, (other_x, other_y)) in enumerate(city_coords.items()):
         if i != j:
             ax1.plot(
@@ -99,10 +96,8 @@ def initial_population(cities_list, n_population=250):
     population_perms = []
     possible_perms = list(permutations(cities_list))
     random_ids = random.sample(range(0, len(possible_perms)), n_population)
-
     for i in random_ids:
         population_perms.append(list(possible_perms[i]))
-
     return population_perms
 
 
@@ -152,9 +147,6 @@ def roulette_wheel(population, fitness_probs):
 def crossover(parent_1, parent_2):
     n_cities_cut = len(cities_names) - 1
     cut = round(random.uniform(1, n_cities_cut))
-    offspring_1 = []
-    offspring_2 = []
-
     offspring_1 = parent_1[0:cut]
     offspring_1 += [city for city in parent_2 if city not in offspring_1]
 
@@ -191,27 +183,23 @@ def run_ga(
             parents_list[i], parents_list[i + 1]
         )
 
-        mutate_threashold = random.random()
-        if mutate_threashold > (1 - mutation_per):
+        if random.random() > (1 - mutation_per):
             offspring_1 = mutation(offspring_1)
-
-        mutate_threashold = random.random()
-        if mutate_threashold > (1 - mutation_per):
+        if random.random() > (1 - mutation_per):
             offspring_2 = mutation(offspring_2)
 
         offspring_list.append(offspring_1)
         offspring_list.append(offspring_2)
 
     mixed_offspring = parents_list + offspring_list
-
     fitness_probs = fitness_prob(mixed_offspring)
     sorted_fitness_indices = np.argsort(fitness_probs)[::-1]
     best_fitness_indices = sorted_fitness_indices[0:n_population]
-    best_mixed_offspring = []
-    for i in best_fitness_indices:
-        best_mixed_offspring.append(mixed_offspring[i])
+    best_mixed_offspring = [
+        mixed_offspring[i] for i in best_fitness_indices
+    ]
 
-    for i in range(0, n_generations):
+    for gen in range(0, n_generations):
         fitness_probs = fitness_prob(best_mixed_offspring)
         parents_list = []
         for i in range(0, int(crossover_per * n_population)):
@@ -225,12 +213,9 @@ def run_ga(
                 parents_list[i], parents_list[i + 1]
             )
 
-            mutate_threashold = random.random()
-            if mutate_threashold > (1 - mutation_per):
+            if random.random() > (1 - mutation_per):
                 offspring_1 = mutation(offspring_1)
-
-            mutate_threashold = random.random()
-            if mutate_threashold > (1 - mutation_per):
+            if random.random() > (1 - mutation_per):
                 offspring_2 = mutation(offspring_2)
 
             offspring_list.append(offspring_1)
@@ -243,13 +228,13 @@ def run_ga(
             0 : int(0.8 * n_population)
         ]
 
-        best_mixed_offspring = []
-        for i in best_fitness_indices:
-            best_mixed_offspring.append(mixed_offspring[i])
+        best_mixed_offspring = [
+            mixed_offspring[i] for i in best_fitness_indices
+        ]
 
         old_population_indices = [
             random.randint(0, (n_population - 1))
-            for j in range(int(0.2 * n_population))
+            for _ in range(int(0.2 * n_population))
         ]
         for i in old_population_indices:
             best_mixed_offspring.append(population[i])
@@ -259,22 +244,51 @@ def run_ga(
     return best_mixed_offspring
 
 
-# Parameters for the Genetic Algorithm
+# --- Execution Parameters ---
 n_population = 250
 n_generations = 100
 crossover_per = 0.8
 mutation_per = 0.1
 
-# Run algorithm
 best_mixed_offspring = run_ga(
     cities_names, n_population, n_generations, crossover_per, mutation_per
 )
 
-total_dist_all_individuals = []
-for i in range(0, n_population):
-    total_dist_all_individuals.append(
-        total_dist_individual(best_mixed_offspring[i])
+# Calculate results
+total_dist_all_individuals = [
+    total_dist_individual(ind) for ind in best_mixed_offspring
+]
+index_minimum = np.argmin(total_dist_all_individuals)
+
+minimum_distance = min(total_dist_all_individuals)
+shortest_path = best_mixed_offspring[index_minimum]
+
+# --- Section 2: Results Display ---
+st.header("2. Optimization Results")
+st.metric(label="Minimum Distance Travelled", value=f"{minimum_distance:.3f}")
+
+st.write("**Optimal City Order:**")
+st.json(shortest_path)
+
+# --- Section 3: Route Plot ---
+x_shortest = [city_coords[city][0] for city in shortest_path]
+y_shortest = [city_coords[city][1] for city in shortest_path]
+x_shortest.append(x_shortest[0])
+y_shortest.append(y_shortest[0])
+
+fig2, ax2 = plt.subplots(figsize=(12, 8))
+ax2.plot(x_shortest, y_shortest, "--go", label="Best Route", linewidth=2.5)
+ax2.legend()
+
+for i in range(len(x)):
+    for j in range(i + 1, len(x)):
+        ax2.plot([x[i], x[j]], [y[i], y[j]], "k-", alpha=0.09, linewidth=1)
+
+ax2.set_title("TSP Best Route Using GA", fontsize=20, color="k")
+
+for i, txt in enumerate(shortest_path):
+    ax2.annotate(
+        f"{i+1}- {txt}", (x_shortest[i], y_shortest[i]), fontsize=16
     )
 
-index_minimum = np.argmin(total_dist_all_individuals)
-minimum_distance =
+st.pyplot(fig2)
